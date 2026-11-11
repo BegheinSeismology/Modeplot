@@ -1,0 +1,356 @@
+             Software for OAS host control on a SUN
+
+             John H. Woodhouse
+             Department of Earth and Planetary Sciences
+             Harvard University
+             Cambridge, MA 02138
+             (617) 495 2637
+
+The programs in this package are somewhat preliminary and have
+not been completely finalized.
+
+The programs are grouped in two files:
+
+iolib.f     This library contains routines for performing various
+            functions on the OAS. It also contains
+            routines for performing binary input/output to both
+            tape and disk files. These are not OAS specific
+            and are applicable to io magnetic disk files and
+            to a real magnetic tape as well as to  tape images on the OAS.
+
+ciolib.c    C routines used by iolib and oaslib.
+
+In addition the program opt.f is supplied, which provides interactive
+communication with the OAS using commands from the terminal or
+from input scripts. This program behaves as a mini-shell.
+A test program scan.f is also supplied to illustrate use of
+the subroutines.  By examining opt.f and scan.f it should be
+possible to understand how the various routines work. The most important
+routines are:
+
+   subroutine oasopen()
+           Open the OAS on serial port /dev/ttyb and test
+           that tape device /dev/nrmt0 is not busy. If either
+           device is busy the program issues a message on stderr
+           (FORTRAN unit 0) and waits and loops. If it is desired
+           to connect the OAS to a different port or to a different
+           tape controller these device names should be changed in
+           oasopen.
+
+   subroutine oassend(com,resp,lresp,millis)
+           Send the character string com, which should consist of
+           a valid OAS host-control command,
+           to the OAS and return the response
+           to character variable resp. The number of bytes
+           in resp is returned to lresp. The integer input argument
+           millis is the number of milliseconds to wait for the
+           OAS to respond. Usually it is desirable to set millis=-1,
+           which signifies that the program should wait until a
+           response is received. However, in this case the program
+           will wait indefinitely if, for some
+           reason, the OAS does not respond.
+           The contents of resp is an OAS error message or other
+           response. See the OAS manual for valid host-control
+           commands and for error messages. Depending upon a
+           dip switch setting on the OAS, error messages are either
+           descriptive text strings or ascii hexadecimal numbers.
+           Although oassend should work in either case, some of
+           the programs on this package assume that error messages
+           are descriptive strings. A value lresp=0
+           signifies no error. A value lresp=-1 signifies that no valid
+           response was received, or that resp is not large enough 
+           to receive the message. 'character*200 resp' is more than
+           sufficient.
+          
+   subroutine oasclose()
+           Dismount any mounted tape image, return OAS to passthru
+           mode and close serial port /dev/ttyb.
+        
+   subroutine oasterm()
+           Close OAS without dismounting or returning to passthru
+           mode. This is useful if a tape image has been mounted
+           and put online and a subsequent program is to access the
+           tape image as /dev/rmt0 or /dev/nrmt0.
+
+   subroutine opnfil(lu,cname,iaccess,ifile,irec,istat,lrec)
+           Open the file or device having name cname. If
+           cname begins with '/opt/' the remainder of the 
+           name is interpretted as an OAS tape image name;
+           in this case oasopen() is called, the requested
+           tape image is mounted, put online and opened as
+           /dev/rmt0.
+           For a tape or a tape image, input
+           integers ifile, irec signify that the tape is
+           to be positioned after ifile filemarks followed
+           by irec records; to access the first record of
+           the first file, set ifile=0, irec=0. Input integer
+           lu is a logical  unit number between 1 and 20,
+           which will subsequently be used to identify the 
+           tape for reading or writing using bffi and bffo.
+           This unit number DOES NOT CORRESPOND WITH A FORTRAN
+           LOGICAL UNIT; a tape opened in this way cannot
+           be read or written using fortran 'read' and 'write' 
+           statements. Input integer iaccess indicates access privilege:
+           1=read_only, 4=read_write; other values at users risk.
+           A non-zero value of istat signifies an
+           error, usually that the requested tape image does not
+           exist. Nonexistent files are not created by opnfil.
+           For a tape or a tape image, input integer
+           lrec is ignored.
+           For disk, the file will be accessed as a fixed length,
+           direct access file with record length iabs(lrec). If
+           lrec is negative multiple records may be read or
+           written to satisfy a call to bffi or bffo. Thus
+           complete dynamic access can be obtained for disk files
+           by setting lrec=-1.
+          
+iolib:  subroutine bffi(lu,idummy,ibuf,nbytes,istat,nread,irec)
+           Read nbytes bytes from the file or tape opened
+           by opnfil on unit lu, into ibuf.
+           input  integer*4       lu      logical unit, see opnfil
+                  integer*4       idummy  unused, set to 1
+           output integer*4 array ibuf    buffer to receive bytes read,
+                                          of dimension at least
+                                          (nbytes+3)/4.
+           input  integer*4       nbytes  Maximum number of bytes to
+                                          be read.
+           output integer*4       istat   status=2 means successful
+                                          read, status=3 means end of
+                                          file. Other values signify
+                                          physical read errors. If a
+                                          short record has been read
+                                          because end-of-file has been
+                                          encountered, istat=2. Only
+                                          if the file is positioned at
+                                          or beyond end-of-file prior
+                                          to the call to bffi, will
+                                          istat=3 (nread=0) be returned.
+           output integer*4       nread   Number of bytes read. For
+                                          tape or tape images
+                                          this will be either
+                                          equal to nbytes or to the
+                                          physical record length
+                                          (blocksize),
+                                          whichever is smaller. For 
+                                          disk files opened with lrec
+                                          positive (see opnfil)
+                                          nread will
+                                          be equal to lrec or to
+                                          nbytes, whichever is smaller,
+                                          unless the file is exhausted.
+                                          If lrec is negative, nread
+                                          will be equal to nbytes unless
+                                          the file is exhausted.
+           input  integer*4       irec    Record number (1 signifies
+                                          first, 0 signifies next).
+                                          For tapes or tape images
+                                          irec is the record
+                                          number of pysical records (or
+                                          blocks) on the tape. For disk
+                                          files the file is positioned
+                                          at byte offset
+                                          (irec-1)*iabs(lrec) (see opnfil)
+                                          from the beginning of the file
+                                          if irec is greater than zero,
+                                          or at the byte offset which is
+                                          the first multiple of lrec
+                                          beyond the byte last read if
+                                          irec equals 0.
+                                          
+  subroutine bffo(lu,idummy,ibuf,nbytes,istat,irec)
+           Write nbytes bytes from ibuf to the file or tape opened
+           by opnfil on unit lu.
+           The arguments are similar to those of bffi; see above.
+
+  subroutine closfl(lu,istat)
+          Close the file previously opened by opnfil. If it was
+          a tape image (identified by a name beginning with /opt/)
+          the OAS is also closed by a call to oasclose (see above).
+
+
+                     INSTALLATION and PROGRAM NOTES
+
+Load the files from the 'tar' tape supplied.
+The shell script MAKE compiles libraries iolib.f , ciolib.c and
+the main programs opt.f, scan.f. Executables opt and scan are 
+crated by the link editor.  Run MAKE:
+    $MAKE
+Now try opt:
+    $opt
+You should see the opt prompt 'opt>'. (In following examples you don't
+type the 'opt>' prompt.)
+Check the date:
+    opt>date
+The date should appear. This is the date determined by a host control
+OAS command 'date' sent to the OAS. Similarly check the time.
+    opt>time
+Now check the volumes on the OAS:
+    opt>vdir
+This should produce a list of the volumes on your jukebox, with
+information about remaining space, time created etc.
+For a complete directory listing:
+    opt>adir
+
+Now try to mount a tape using the shell script 'omount'. Type to the 
+unix shell
+    $omount MY TAPE IMAGE NAME
+replacing 'MY TAPE IMAGE NAME' by the name of a tape on your jukebox.
+If you are next to the jukebox you should hear it mount the tape.
+Try to scan the tape using the program scan:
+
+$scan /dev/rmt0
+
+assuming that this is the device name you're using for the tape device.
+Answer the questions scan asks by hitting 'return' (ie. with a blank line).
+scan reports the
+blocksizes it encounters and the number of records in each file on the tape.
+
+Now try using scan's implicit mount faciclity by typing
+
+$scan '/opt/ANOTHER TAPE'
+
+(quotes needed only if the tape image name contains funny characters, such as spaces
+in this example). 
+If all these test work you're in good shape. 
+ 
+                              PROGRAM OPT
+
+The commands which opt understands are of two kinds: OAS commands and OPT commands.
+opt first examines  a commands to see if it is a known OAS host control command.
+If it is, the line is passed as-is to the OAS. The OAS commands currently recognized 
+by opt are:
+
+position      compare     copy      date       directory     dismount
+insert        magset      mount     online     offline       passthru
+remove        rewind      set       show       time.
+
+See the OAS manual for the format and function of these commands.
+
+In addition, the command 'send' is provided shich simply sends the 
+remainder of the command line to the OAS and returns the response.
+Thus the two command lines
+    opt>date
+and
+    opt>send date
+are equivalent. This is useful for sending to the OAS commands implemented
+in new Aquidneck releases which havn't yet been incorporated into opt.
+Other commands implemented in opt generate sequences of operations. Currently these are:
+
+write     vdir   tdir   ldir    adir   qdismnt   oreset   omount.
+
+They have the following functions:
+
+write       Write the remainder of the command line to the terminal screen
+            (like the unix command echo).
+
+tdir        List the directory information of tape images on the currently
+            mounted volume, terminated by the OAS error message
+            'E-DMGR-END OF DIRECTORY'.
+
+ldir        List all entries from the OAS directory which satisfy the current
+            setting of the pattern set by the OAS 'directory' command.
+            For example, the following two lines are equivalent to 'tdir'
+                opt>dir *
+                opt>ldir
+            (Note that opt recognizes abbreviations for commands, provided they
+            consist of at least three characters and are unique)
+
+adir        List the entire tape image directory of the OAS.  Volume
+            names are listed, followed by a list of tape images on the volume,
+            terminated by the 'E-DMGR-END OF DIRECTORY' message. 
+
+qdismnt     Dismount the currently mounted tape image without producing an
+            error message in the case that no tape image is mounted.
+
+oreset      Dismount the currently mounted tape image and physically
+            dismount the currently mounted volume. No error messages are
+            genereated if there is no mounted tape or volume. The
+            OAS is placed in passthru mode. oreset is equivalent to
+                opt>offline
+                opt>dismount
+                opt>dismount/v
+                opt>passthru
+
+omount      Mount the named tape image and put OAS online. When opt terminates
+            the tape will remain online, so subsequent programs can access it
+            as /dev/rmt0 or /dev/nrmt0 (assuming this is the device name in use
+            for the tape controller connected to the OAS). Thus the command line
+                  opt>omount MY TAPE IMAGE
+            is equivalent to the OAS commands
+                  opt>dismount
+                  opt>mount "MY TAPE IMAGE"
+                  opt>online
+            Note that omount doesn't require any quotes, even if tape names
+            contain spaces.              
+
+The character '|' may be used to separate commands on the same line
+(like ';' in unix. This character can be changed, if desired, by 
+changing the corresponding argument of subroutine gparse in opt.f).
+Thus we can type, for example, 
+
+     opt>dismount|mount "MY TAPE IMAGE"|online
+
+An empty input line, CNTRL-D or END_OF_FILE terminates execution of opt.
+
+opt can take its commands from scripts. If a command unknown to opt is entered,
+lets say you type
+    opt>xxxxx
+opt first looks for the file xxxxx.opt and if that does not exist, for the 
+file xxxxx; if neither exists an error message is generated. opt scripts
+may invoke other opt scripts. A test of this facility is provided in the
+files test.opt, test1.opt, test2.opt, test3.opt. Test it:
+    opt>test
+These  test scripts just write messages to the screen using the opt command 'write'.
+
+Arguments can be passed to opt scripts and referred to within the script as 
+$1, $2 as in unix. Note that in this implementation, argument substitution
+is not performed for lines starting with an
+OAS commands -- mount, rewind etc. This is a limitation that needs fixing.
+
+There are several optional command line arguments recognized by opt:
+
+$opt commands -l <list_file> -f <command_file> -q
+
+'commands' is a  sequence of opt commands, separated by |'s.
+If command contains spaces or quotes it 
+should be surrounded by single or double quotes. Quoted strings can also be substrings
+of 'commands'.  These commands are executed by opt at startup. Control then passes
+the the opt script specified after the '-f' switch. If the '-f' switch is absent
+'-f /dev/tty' is assumed, leading to intractive operation from the terminal. If the
+'-f' switch is present with a null argument opt terminates after executing
+'commands'. This is useful for performing operations on the OAS using shell 
+scripts when interactive mode is not desired.  For instance the shell script
+oreset, which is provided, consists of the line
+
+opt oreset -f
+
+This can be used directly from the shell to reset the jukebox. 
+The '-q' switch indicates 'quiet' oeration, with minimal output to the
+terminal screen.
+The '-l' switch allows a list file to be specified. This is mainly useful for
+capturing directory information. The shell script vdir, which is provided,
+consists of the line
+
+opt vdir -l $1 -q -f
+
+This produces a file containing the jukebox volume directory, e.g.
+you can type  to the shell
+
+$vdir my_volume_directory
+
+to generate a listing of the volume directory in the file 'my_volume_directory'.
+If you want to record the time in the file you could change vdir to read
+
+opt 'date|time|vdir' -l $1 -q -f
+
+Note that commands containing '|' must be quoted since unix has its own interpretation
+of '|'.  A similar shell script 'adir' is provided to capture the complete
+jukebox directory.
+   
+                            PROGRAM SCAN
+
+scan is a simple program which should be self explanatory if you read the
+descriptions of subroutines  opnfil and bffi above. Note that
+scan should work on real tapes
+and magnetic disk files. In the latter case scan needs to have a blocksize 
+specified in anwer to the question it asks. Any number will do.

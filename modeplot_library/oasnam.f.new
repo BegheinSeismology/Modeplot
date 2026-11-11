@@ -1,0 +1,10 @@
+
+      character*80 function oasnam(string,lname)
+      character*(*) string
+      character*1 cc
+      ll=istlen(string)
+      oasnam='"'//string(1:ll)//'"'
+      lname=ll+2
+      if(oasnam(ll+1:ll+2).eq.';"') oasnam(ll+1:ll+2)='";'
+      return
+      end

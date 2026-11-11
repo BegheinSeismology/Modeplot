@@ -1,0 +1,48 @@
+c----------------------------------------------------------
+      subroutine margsu(string)
+      character*(*) string
+      include 'margli.h'
+      logical quoted
+      lstrli(ilev)=istlen(string)
+      k=0
+      numali(ilev)=0
+      ip=1
+      quoted=.FALSE.
+   10 continue
+      do while((k.le.0.or.string(k:k).eq.' ').and.k.le.lstrli(ilev))
+        k=k+1
+      enddo
+      if(k.gt.lstrli(ilev)) return
+      k1=k
+      do while(k1.le.lstrli(ilev).and.(string(k1:k1).ne.' '.or.quoted))
+        if(string(k1:k1).eq."'") then
+          if(k1.eq.k) then
+            quoted=.TRUE.
+            k=k+1
+            k1=k1+1
+          else
+            quoted=.FALSE.
+            goto 20
+          endif
+        else
+          k1=k1+1
+        endif
+      enddo
+   20 continue
+      if(k1.eq.k) then
+        return
+      else
+        numali(ilev)=numali(ilev)+1
+        lineli(ilev)(ip:ip+k1-1-k)=string(k:k1-1)
+        iptli(numali(ilev),ilev)=ip
+        ip=ip+k1-k
+        iptli(numali(ilev)+1,ilev)=ip
+      endif
+      k=k1
+      if(k.le.lstrli(ilev)) goto 10
+      write(6,*) 'margsu numali(ilev)=',numali(ilev),'  ilev=',ilev
+      do i=1,numali(ilev)
+        write(6,*) '|'//lineli(ilev)(iptli(i,ilev):iptli(i+1,ilev)-1)//'|'
+      enddo
+      return
+      end

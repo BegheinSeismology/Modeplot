@@ -1,0 +1,95 @@
+
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine opnfil(lufl,namein,iap,ifile,irec,istat,lrec)
+      character*1 quote,null
+      parameter (quote='"')
+      parameter (null=char(0))
+      character*(*) namein
+      character*80 path,name
+      character*200 mess
+      parameter (nlu=20)
+      common/openfile/jchn(nlu),jrec(nlu),jfile(nlu),jrecl(nlu)
+      common/optdr/ifopt(nlu)
+      common/oasi/ichan,itchan,ifonli
+      common/ercod/ierl
+      if(namein(1:5).eq.'/opt/') then
+        nbynam=lenstr(namein)
+        jstat=0
+        call oasopen()
+        path='mount '//quote//namein(6:nbynam)//quote
+        llen=3+nbynam
+        call oassend('offline',mess,lmess,-1)
+        call oassend('dismount',mess,lmess,-1)
+        call oassend(path(1:llen),mess,lmess,-1)
+        if(lmess.ne.0) then
+          if(itry.le.4.and.mess(1:21).ne.'E-DMGR-TAPE NOT FOUND')
+     1      goto 629
+          call oasclose()
+          jstat=1
+        else
+          call oassend('online',mess,lmess,-1)
+          call wait(200)
+          path='/dev/rmt0'
+          ifopt(lufl)=1
+        endif
+      endif
+      if(jstat.ne.0) then
+        istat=4
+        return
+      endif
+      if(iap.eq.1) then
+c       read only
+        isunop=0
+      else
+c       read/write
+        isunop=2
+      endif
+
+      if(ifopt(lufl).eq.0.or.itchan.lt.0) then
+        call adnul(path,path)
+        call copen(path,jchn(lufl),isunop,ierrno)
+        if(ierrno.ne.0) call check('copen in opnfil')
+      else
+        jchn(lufl)=itchan
+      endif
+      call fstat(lufl,lent,isuntyp,isize)
+      write(0,"('sun file mode (octal): ',8r,i10)") isuntyp
+      if(isuntyp.eq.o'20666') then
+        call cstexc(jchn(lufl),ires,ierrno)
+        jrecl(lufl)=0
+        jfile(lufl)=ifile
+        jrec(lufl)=irec
+        if(ifile.gt.0)  call cmtio(jchn(lufl),1,ifile,ires,ierrno)
+        if(irec.gt.0)  call cmtio(jchn(lufl),3,irec,ires,ierrno)
+      else
+        jrecl(lufl)=iabs(lrec)
+        jfile(lufl)=isuntyp
+        if(iopt.eq.1) then
+          jfile(lufl)=200
+        endif
+        jrec(lufl)=irec
+        if(iap.eq.3.or.iap.eq.5.or.iap.eq.6)
+     1     jrec(lufl)=(isize+jrecl(lufl)-1)/jrecl(lufl)+irec
+        jrec(lufl)=max0(0,jrec(lufl))
+      endif
+      return
+      end
+$$
+        name='/dev/rmt0'
+
+      else
+
+
+
+
+        name=namein
+
+
+      endif
+
+
+      call opnold(lufl,name,iap,ifile,irec,istat,lrec)
+      return
+      end

@@ -1,0 +1,1016 @@
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine oasopen()
+      save
+      character*200 mess
+      common/oasi/ichan,itchan,ifonli
+      ittry=0
+      call copen('/dev/ttyb',ichan,2,ierrno)
+      if(ierrno.ne.0) then
+        if(ierrno.eq.16) then
+           write(0,"('opt: device busy: waiting ...')")
+           call wait(4000)
+        else
+          call cperror('opt')
+          call exit(2)
+        endif
+   10   call copen('/dev/ttyb',ichan,2,ierrno)
+        if(ierrno.ne.0) then
+          if(ierrno.eq.16) then
+            call wait(4000)
+            goto 10
+          else
+            call cperror('opt')
+            call exit(2)
+          endif
+        endif
+      endif
+      itchan=-1
+      call copen('/dev/nrmt0',itch,0,ierrno)
+        if(ierrno.eq.0) then
+        itchan=itch
+      else if(ierrno.eq.6) then
+        call cclose(ichan,ires,ierrno)
+        if(ittry.eq.0)
+     1    write(0,"('opt: tape device in use: waiting ...')")
+        call wait(4000)
+        ittry=1+ittry
+        goto 10
+      else if(ierrno.ne.5) then
+        call cperror('oasopen: tape')
+        call exit(2)
+      endif
+      call cgtflag(ichan,iflag,ires,ierrno)
+      iflag=o'341'
+      call cstflag(ichan,iflag,ires,ierrno)
+      call cstexc(ichan,ires,ierrno)
+      itried=0
+   20 call oasflush()
+      call oassend('offline',mess,lmess,200)
+      if(lmess.lt.0) then
+        if(itried.eq.0)
+     1    write(0,"('opt: oas not responding: waiting ...')")
+        itried=1+itried
+        call wait(4000)
+        goto 20
+      endif
+      ifonli=0
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine oasflush()
+      save
+      integer EWOULDBLOCK
+      parameter (EWOULDBLOCK=35)
+      common/oasi/ichan,itchan,ifonli
+      call cnoblock(ichan,1,ires,ierrno)
+      ierrno=0
+      do while(ierrno.ne.EWOULDBLOCK)
+        call cread(ichan,cc,1,ires,ierrno)
+      enddo
+      call cnoblock(ichan,0,ires,ierrno)
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine oassend(command,response,lr,iwt)
+      save
+      character*(*) command,response
+      parameter (maxoas=200)
+      character*1 cr,nl
+      parameter (cr=char(13))
+      parameter (nl=char(10))
+      character*(maxoas) msg
+      character*(maxoas) temp
+      common/oasi/ichan,itchan,ifonli
+      ilc=0
+      ip=0
+      lc=len(command)
+      do while (ilc.lt.lc)
+        ilc=ilc+1
+        if(command(ilc:ilc).eq.'^') then
+          ip=ip+1
+          ilc=ilc+1
+          temp(ip:ip)=char(and(z'0f',ichar(command(ilc:ilc))))
+        else
+          ip=ip+1
+          temp(ip:ip)=command(ilc:ilc)
+        endif
+      enddo
+
+      ip=1+ip
+      temp(ip:ip)=cr
+      if(iwt.ge.0) call cnoblock(ichan,1,ires,ierrno)
+      call cwrite(ichan,temp,ip,ires,ierrno)
+      if(temp(1:4).eq.'onli') ifonli=1
+      if(temp(1:4).eq.'pass') ifonli=1
+      if(iwt.gt.0) call wait(iwt)
+      lr=0
+      ierrno=0
+      do while(ierrno.eq.0.and.(lr.eq.0.or.msg(lr:lr).ne.'>'))
+        lr=lr+1
+        call cread(ichan,msg(lr:lr),1,igot,ierrno)
+      enddo
+      if(ierrno.ne.0) lr=lr-1
+      do i=1,lr
+        if(msg(i:i).eq.cr) msg(i:i)=nl
+        response(i:i)=msg(i:i)
+      enddo
+      if(msg(lr:lr).eq.nl) lr=lr-1
+      if(response(1:1).eq.nl) then
+        lr=lr-1
+        do i=1,lr
+          i1=i+1
+          response(i:i)=response(i1:i1)
+        enddo
+      endif
+      if(iwt.ge.0) call cnoblock(ichan,0,ires,ierrno)
+      if(lr.lt.1.or.response(lr:lr).ne.'>') then
+        lr=-1
+      else
+        call strip(response,lr)
+      endif
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine strip(mess,lmess)
+      character*1 null,nl
+      parameter (null=ichar(0))
+      parameter (nl=ichar(10))
+      character*(*) mess
+      do while (lmess.gt.0)
+        if(mess(lmess:lmess).ne.'>'.and.mess(lmess:lmess).ne.nl
+     1  .and.mess(lmess:lmess).ne.null) goto 10
+        lmess=lmess-1
+      enddo
+   10 continue
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine oasclose()
+      save
+      parameter (maxoas=200)
+      character*(maxoas) mess
+      common/oasi/ichan,itchan,ifonli
+      if(ifonli.ne.0) call oassend('offline',mess,lmes,200)
+      call oassend('rewind d:',mess,lmess,200)
+      call oassend('dismount',mess,lmess,200)
+      call oassend('pass',mess,lmes,200)
+      call cclose(ichan,ires,ierrno)
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine oasterm()
+      save
+      common/oasi/ichan,itchan,ifonli
+      call cclose(ichan,ires,ierrno)
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine wait(millis)
+      isec=millis/1000
+      msec=mod(millis,1000)
+      nrep=msec/32
+      mrem=mod(msec,32)
+      if(isec.ne.0) call csleep(isec)
+      do i=1,nrep
+        call cusleep(32000)
+      enddo
+      if(mrem.ne.0) call cusleep(mrem*1000)
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine chekcl(string)
+      character*1 null
+      parameter (null=char(0))
+      character*(*) string
+      character*30 swnam
+      dimension mlen(30)
+      character*80 cline,mess(30),mss
+      common/ccmlin/swnam(30),cline
+      common/icmlin/nswt,lswnam(30),ifreq(30),nmin(30),nmax(30)
+     1         ,icnt(30),iopn(30),iptr(30),itable(100,3)
+      character*30 swt
+      character*1 c
+      character*8 str1
+      character*21 str2
+      character*10 str3
+      data nbig/99999999/
+
+
+      ierr=0
+      nswt=-1
+      swt=null
+      ll=len(string)
+      do ip=1,ll
+        c=string(ip:ip)
+        if(c.eq.'|') then
+          do k=1,nswt
+            if(swt.eq.swnam(k)) then
+              ierr=5
+              goto 52
+            endif
+          enddo
+          nswt=1+nswt
+          if(nswt.gt.0) then
+            swnam(nswt)=swt
+            lswnam(nswt)=lswt
+            ifreq(nswt)=ifrq
+            nmin(nswt)=nmn
+            nmax(nswt)=nmx
+            mess(nswt)=mss
+            mlen(nswt)=mln
+          endif
+          swt=null
+          lswt=0
+          ifrq=-1
+          nmn=0
+          nmx=0
+          mode=0
+          mode1=0
+          num=0
+          mss=null
+          mln=0
+        else if(c.eq.':') then
+          mode=mode+1
+        else if(c.eq.','.and.mode.ne.3) then
+          if(mode.ne.2) then
+            write(0,*) 'chekcl: format error 1'
+            call exit(2)
+          endif
+          num=0
+          mode1=1
+        else if(c.eq.' '.and.mode.ne.3) then
+        else
+          if(mode.eq.0) then
+            lswt=1+lswt
+            swt(lswt:lswt)=c
+          else if(mode.eq.1) then
+            if(c.eq.'r') then
+              ifrq=1
+            else if(c.eq.'o') then
+              ifrq=0
+            else
+              write(0,*) 'chekcl: format error 2'
+              call exit(2)
+            endif
+          else if(mode.eq.2) then
+            ic=ichar(c)
+            if(ic.lt.z'30'.or.ic.gt.z'39') then
+              if(c.eq.'*') then
+                num=nbig
+              else
+                ierr=1
+                goto 52
+              endif
+            else
+              num=num*10+(ic-z'30')
+            endif
+            if(mode1.eq.0) then
+              nmn=num
+              nmx=num
+              if(num.eq.nbig) then
+                if(ifrq.eq.1) then
+                  nmn=1
+                else
+                  nmn=0
+                endif
+              endif
+            else
+              nmx=num
+            endif
+          else if (mode.eq.3) then
+            mln=1+mln
+            mss(mln:mln)=c
+          else
+            ierr=1
+            goto 52
+          endif
+        endif
+      enddo
+
+      ioplv=0
+      kent=0
+      do i=1,nswt
+        icnt(i)=-1
+      enddo
+      if(lswnam(1).eq.0) then
+        if(nmax(1).gt.0) then
+          ioplv=1+ioplv
+          iopn(ioplv)=1
+          icnt(1)=0
+        endif
+      endif
+      ip2=0
+      
+      cline=' '
+      klen=0
+      llen=len(cline)
+      narg=iargc()
+      do iarg=1,narg
+        klen=klen+1
+        ip1=klen
+        call getarg(iarg,cline(klen:llen))
+        k=llen
+        do while(cline(k:k).eq.' '.and.k.ge.klen)
+          k=k-1
+        enddo
+        ip2=k
+        klen=k+1
+        if(klen.gt.llen) pause 'chekcl: command line too long'
+        ln=ip2-ip1+1
+        imatch=0
+        iswt=0
+        do i=1,nswt
+          if(cline(ip1:ip2).eq.swnam(i)(1:ln)) then
+            if(iswt.eq.0) iswt=i
+            imatch=1+imatch
+          endif
+        enddo
+        if(imatch.gt.1) then
+          ierr=2
+          goto 52
+        else if(imatch.eq.1) then
+          if(nmax(iswt).gt.0) then
+            ioplv=1+ioplv
+            iopn(ioplv)=iswt
+          endif
+          icnt(iswt)=0
+        else
+          if(ioplv.le.0) then
+            ierr=1
+            goto 52
+          endif
+          kent=kent+1
+          iswt=iopn(ioplv)
+          if(icnt(iswt).eq.0) then
+            iptr(iswt)=kent
+          endif
+          ipt=iptr(iswt)
+          ipt0=ipt
+          iptl=kent
+          do i=1,icnt(iswt)
+            iptl=ipt
+            ipt=itable(ipt,3)
+          enddo
+          if(ipt.ne.iptr(iswt)) pause 'circle does not close'
+          itable(kent,1)=ip1
+          itable(kent,2)=ip2
+          itable(kent,3)=iptr(iswt)
+          itable(iptl,3)=kent
+          icnt(iswt)=1+icnt(iswt)
+          if(icnt(iswt).eq.nmax(iswt)) then
+            ioplv=ioplv-1
+          endif
+        endif
+      enddo
+      klen=max0(0,klen-1)
+
+   52 continue
+      if(ierr.eq.0) then
+        do i=1,nswt
+          if(ifreq(i).ne.0.and.icnt(i).lt.0) ierr=3
+          if(icnt(i).ge.0.and.(icnt(i).lt.nmin(i)
+     1                        .or.icnt(i).gt.nmax(i))) ierr=4
+        enddo
+      endif
+      if(ierr.ne.0) then
+        write(0,"(72a1)") (cline(i:i),i=1,klen)
+      else
+        goto 99
+      endif
+      goto(1,2,3,4,5),ierr
+      goto 99
+    1 write(0,"('command line error')")
+      goto 97
+    2 write(0,"('non-unique abbreviation for identifier')")
+      goto 97
+    3 write(0,"('required identifier not present')")
+      goto 97
+    4 write(0,"('invalid number of arguments')")
+      goto 97
+    5 write(0,"('duplicate identifier in command description')")
+   97 write(0,"('usage:')")
+      do i=1,nswt
+        if(ifreq(i).ne.0) then
+          str1='required'
+        else
+          str1='optional'
+        endif
+        if(nmax(i).eq.nbig) then
+          write(str2,"(i3,' or more arguments')") nmin(i)
+        else if(nmax(i).eq.nmin(i).and.nmax(i).eq.1) then
+          write(str2,"(i3,' argument         ')") nmax(i)
+        else if(nmax(i).eq.nmin(i)) then
+          write(str2,"(i3,' arguments        ')") nmax(i)
+        else if(nmax(i).eq.1) then
+          write(str2,"(i3,' -',i3,' argument    ')") nmin(i),nmax(i)
+        else
+          write(str2,"(i3,' -',i3,' arguments   ')") nmin(i),nmax(i)
+        endif
+        if(lswnam(i).eq.0) then
+          str3=' '
+        else
+          str3=swnam(i)(1:lswnam(i))
+        endif
+        write(0,"(a10,1x,a21,1x,a8,': ',80a1)") str3,str2,str1
+     1    ,(mess(i)(j:j),j=1,mlen(i))
+
+      enddo
+      call exit(2)
+   99 continue
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      character*80 function getunx(ident,nni,nbyts)
+      character*1 null
+      parameter (null=char(0))
+      character*(*) ident
+      character*30 swnam
+      character*80 cline
+      common/ccmlin/swnam(30),cline
+      common/icmlin/nswt,lswnam(30),ifreq(30),nmin(30),nmax(30)
+     1         ,icnt(30),iopn(30),iptr(30),itable(100,3)
+      nn=max0(1,nni)
+      ll=len(ident)
+      do while (ll.gt.0.and.(ident(ll:ll).eq.' '
+     1          .or.ident(ll:ll).eq.null))
+        ll=ll-1
+      enddo
+      imatch=0
+      iswt=0
+      ierr=0
+      do i=1,nswt
+        if((ll.eq.0.and.lswnam(i).eq.0)
+     1   .or.(ll.gt.0.and.ident(1:ll).eq.swnam(i)(1:ll))) then
+          imatch=1+imatch
+          if(iswt.eq.0) iswt=i
+        endif
+      enddo
+      if(imatch.eq.0) then
+        ierr=1
+        goto 99
+      else if(imatch.ne.1) then
+        ierr=2
+        goto 99
+      else
+        if(icnt(iswt).lt.0) then
+          nbyts=-1
+          getunx=' '
+          return
+        else if(nn.gt.icnt(iswt)) then
+          nbyts=0
+          getunx=' '
+          return
+        else
+          ipt=iptr(iswt)
+          ipt0=ipt
+          do i=1,nn-1
+            ipt=itable(ipt,3)
+            if(ipt.eq.ipt0) then
+              ierr=3
+              goto 99
+            endif
+          enddo
+          ip1=itable(ipt,1)
+          ip2=itable(ipt,2)
+          nbyts=ip2-ip1+1
+          getunx=cline(ip1:ip2)
+          return
+        endif
+      endif
+   99 continue
+      goto (1,2,3),ierr
+    1 write(0,"('no match in getunx')")
+      goto 97
+    2 write(0,"('non-unique abbreviation for identifier')")
+      goto 97
+    3 write(0,"('required argument not found in table')")
+      goto 97
+   97 call exit(2)
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine adnul(string1,string2)
+      character*1 null
+      parameter (null=char(0))
+      character*(*) string1,string2
+      string2=string1
+      ip=0
+   10 ip=1+ip
+      if(string2(ip:ip).ne.' '.and.string2(ip:ip).ne.null) goto 10
+      string2(ip:ip)=null
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine backfl(lufl)
+      parameter (nlu=20)
+      common/openfile/jchn(nlu),jrec(nlu),jfile(nlu),jrecl(nlu)
+      if(jrecl(lufl).eq.0) then
+        if(jrec(lufl).eq.0) then
+          if(jfile(lufl).le.1) then
+            call rewtp(lufl)
+            jfile(lufl)=0
+            jrec(lufl)=0
+            return
+          else
+            call cmtio(jchn(lufl),2,2,ires,ierrno)
+            if(ierrno.ne.0) call check('cmtio:backfile in backfl')
+            call cmtio(jchn(lufl),1,1,ires,ierrno)
+            if(ierrno.ne.0) call check('cmtio:forwardfile in backfl')
+            jrec(lufl)=0
+            jfile(lufl)=jfile(lufl)-1
+          endif
+        endif
+      else 
+        call rewfl(lufl)
+      endif
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine backsp(lufl)
+      parameter (nlu=20)
+      common/openfile/jchn(nlu),jrec(nlu),jfile(nlu),jrecl(nlu)
+      if(jrecl(lufl).eq.0) then
+        if(jrec(lufl).le.0) then
+          call rewfl(lufl)
+          jrec(lufl)=0
+        else
+          call cmtio(jchn(lufl),4,1,ires,ierrno)
+          if(ierrno.ne.0) call check('cmtio:backrec in rewfl')
+          jrec(lufl)=jrec(lufl)-1
+        endif
+      else
+        jrec(lufl)=max0(0,jrec(lufl)-1)
+      endif
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine bffi(lufl,ifbin,ibuf,nbytes,istat,nread,irec)
+      parameter (nlu=20)
+      common/openfile/jchn(nlu),jrec(nlu),jfile(nlu),jrecl(nlu)
+      dimension ibuf(1)
+      if(jrecl(lufl).eq.1.and.jfile(lufl).eq.200) then
+        nread=0
+        nget=nbytes
+        irc=irec
+        if(irc.eq.0) irc=jrec(lufl)+1
+        iad=1
+   10   nb=min0(nget,65532)
+        call bffis(lufl,ifbin,ibuf(iad),nb,istat,nr,irc)
+        if(istat.eq.2.and.nr.eq.nb) then
+          if(nr.eq.nget) then
+            nread=nread+nr
+          else
+            nr4=nr/4
+            nr=4*nr4
+            irc=irc+nr
+            nread=nread+nr
+            iad=iad+nr4
+            nget=nget-nr
+            goto 10
+          endif
+        else
+          nread=nread+nr
+        endif
+      else
+        call bffis(lufl,ifbin,ibuf,nbytes,istat,nread,irec)
+      endif
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine bffin(lufl,ifbin,ibuf,nwords,istat,nread)
+      dimension ibuf(1)
+      nbytes=4*nwords
+      call bffi(lufl,ifbin,ibuf,nbytes,istat,nread,0)
+      nread=nread/4
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine bffis(lufl,ifbin,ibuf,nbytes,istat,nread,irec)
+      parameter (nlu=20)
+      common/openfile/jchn(nlu),jrec(nlu),jfile(nlu),jrecl(nlu)
+      dimension ibuf(1)
+      krec=irec-1
+      if(irec.eq.0) krec=jrec(lufl)
+      if(jrecl(lufl).eq.0) then
+        if(krec.lt.jrec(lufl)) then
+          call cmtio(jchn(lufl),4,jrec(lufl)-krec,ires,ierrno)
+          write(0,"('positioning tape: krec=',i6,'  jrec=',i6)")
+     1       krec,jrec(lufl)
+        else if(krec.gt.jrec(lufl)) then
+          call cmtio(jchn(lufl),3,krec-jrec(lufl),ires,ierrno)
+          write(0,"('positioning tape: krec=',i6,'  jrec=',i6)")
+     1       krec,jrec(lufl)
+        endif
+        call cread(jchn(lufl),ibuf,nbytes,nread,ierrno)
+        istat=2
+        if(ierrno.eq.0) then
+          if(nread.eq.0) istat=3
+        else
+          istat=5
+          call check('cread in bffis')
+        endif
+        if(istat.eq.3) goto 30
+        jrec(lufl)=1+krec
+        return
+   30   jfile(lufl)=1+jfile(lufl)
+        jrec(lufl)=0
+      else
+      nb=nbytes
+      if(jfile(lufl).ne.200) nb=min0(nb,jrecl(lufl))
+        call clseek(jchn(lufl),jrecl(lufl)*krec,0,ires,ierrno)
+        if(ierrno.ne.0) call check('clseek in bffis')
+        call cread(jchn(lufl),ibuf,nb,nread,ierrno)
+        if(ierrno.ne.0) call check('cread in bffis')
+        istat=2
+        if(nread.eq.0) istat=3
+        if(istat.ne.3) then
+          jrec(lufl)=krec+(nread+jrecl(lufl)-1)/jrecl(lufl)
+        else
+          jrec(lufl)=krec
+        endif
+      endif
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine bffo(lufl,ifbin,ibuf,nbytes,istat,irec)
+      parameter (nlu=20)
+      common/openfile/jchn(nlu),jrec(nlu),jfile(nlu),jrecl(nlu)
+      dimension ibuf(1)
+      if(jrecl(lufl).eq.1.and.jfile(lufl).eq.200) then
+        nread=0
+        nget=nbytes
+        irc=irec
+        if(irc.eq.0) irc=jrec(lufl)+1
+        iad=1
+   10   nb=min0(nget,65532)
+        call bffos(lufl,ifbin,ibuf(iad),nb,istat,irc)
+        nget=nget-nb
+        if(nget.ne.0) then
+          nb4=nb/4
+          irc=irc+nb
+          iad=iad+nb4
+          goto 10
+        endif
+      else
+        call bffos(lufl,ifbin,ibuf,nbytes,istat,irec)
+      endif
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine bffos(lufl,ifbin,ibuf,nbytes,istat,irec)
+      parameter (nlu=20)
+      common/openfile/jchn(nlu),jrec(nlu),jfile(nlu),jrecl(nlu)
+      dimension ibuf(1)
+      krec=irec-1
+      if(irec.eq.0) krec=jrec(lufl)
+      kchn=jchn(lufl)
+      if(jrecl(lufl).eq.0) then
+        if(krec.lt.jrec(lufl)) then
+          call cmtio(jchn(lufl),4,jrec(lufl)-krec,ires,ierrno)
+        else if(krec.gt.jrec(lufl)) then
+          call cmtio(jchn(lufl),3,krec-jrec(lufl),ires,ierrno)
+        endif
+        call cwrite(jchn(lufl),ibuf,nbytes,ires,ierrno)
+        if(ierrno.ne.0.or.ires.ne.nbytes) call check('cwrite in bffos')
+        istat=2
+        jrec(lufl)=1+krec
+        return
+      else
+        nb=nbytes
+        if(jfile(lufl).ne.200) nb=min0(nbytes,jrecl(lufl))
+        call clseek(jchn(lufl),jrecl(lufl)*krec,0,ires,ierrno)
+        if(ierrno.ne.0) call check('clseek in bffos')
+        call cwrite(jchn(lufl),ibuf,nb,ires,ierrno)
+        if(ierrno.ne.0.or.ires.ne.nbytes) call check('cwrite in bffos')
+        istat=2
+        jrec(lufl)=krec+(nb+jrecl(lufl)-1)/jrecl(lufl)
+      endif
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine bffout(lufl,ifbin,ibuf,nwords,istat)
+      dimension ibuf(1)
+      nbytes=4*nwords
+      call bffo(lufl,ifbin,ibuf,nbytes,istat,0)
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine check(text)
+      character*(*) text
+      call cperror(text)
+      call exit(2)
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine closfl(lufl,istat)
+      parameter (nlu=20)
+      common/openfile/jchn(nlu),jrec(nlu),jfile(nlu),jrecl(nlu)
+      common/optdr/ifopt(nlu)
+      call cclose(jchn(lufl),ires,ierrno)
+c     if(ierrno.ne.0) call check('cclose in closfl')
+      if(ierrno.ne.0) then
+        call cperror('cclose in closfl')
+        print*,'logical unit ',lufl,' chanel ',jchn(lufl)
+      endif
+      if(ifopt(lufl).ne.0) then
+        call cmtio(jchn(lufl),5,1,ires,ierrno)
+        if(ierrno.ne.0) call check('cmtio:rewind in closfl')
+        call oasclose
+        ifopt(lufl)=0
+      endif
+      jchn(lufl)=0
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine endfl(lufl)
+      parameter (nlu=20)
+      common/openfile/jchn(nlu),jrec(nlu),jfile(nlu),jrecl(nlu)
+      if(jrecl(lufl).ne.0) then
+        leng=jrec(lufl)*jrecl(lufl)
+        call clseek(jchn(lufl),leng,0,ires,ierrno)
+        if(ierrno.ne.0.or.ires.ne.leng) call check('clseek in endfl')
+        call ctrun(jchn(lufl),leng,ierrno)
+        if(ierrno.ne.0) call check('ctrun in endfl')
+      else
+        call cmtio(jchn(lufl),0,1,ires,ierrno)
+        if(ierrno.ne.0) call check('cmtio in endfl')
+        jfile(lufl)=1+jfile(lufl)
+        jrec(lufl)=0
+      endif
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine fstat(lufl,lent,iftyp,isize)
+      parameter (nlu=20)
+      common/openfile/jchn(nlu),jrec(nlu),jfile(nlu),jrecl(nlu)
+        call cfstat(jchn(lufl),isize,iftyp,ierrno)
+c        if(ierrno.ne.0) call check('cfstat on fstat')
+        lent=jrecl(lufl)
+        return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      function istlen(string)
+      parameter(null=char(0))
+      character*(*) string
+      k=len(string)
+      do 10 i=1,k
+      j=k+1-i
+      if(string(j:j).eq.' '.or.string(j:j).eq.null) goto 10
+      istlen=j
+      goto 99
+   10 continue
+      istlen=0
+   99 return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      function lenfl(lufl)
+      parameter (nlu=20)
+      common/openfile/jchn(nlu),jrec(nlu),jfile(nlu),jrecl(nlu)
+      if(jrecl(lufl).eq.0) then
+        lenfl=0
+      else
+        call fstat(lufl,idummy,idummy1,isize)
+        lenfl=isize
+      endif
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine lower(string)
+      character*(*) string
+      ll=len(string)
+      do 10 i=1,ll
+      ic=ichar(string(i:i))
+      if(ic.ge.65.and.ic.le.90) ic=ic+32
+   10 string(i:i)=char(ic)
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine openw(lu,ifile,iac,i1,i2,istat,lrec)
+      integer*4 ifile(20)
+      character*80 file,file1
+      write(file,1) (ifile(i),i=1,20)
+    1 format(20a4)
+      call adnul(file,file1)
+      call openfl(lu,file1,iac,i1,i2,istat,lrec)
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine openfl(lufl,namein,iap,ifile,irec,istat,lrec)
+      character*(*) namein
+      istat=0
+      call opnfil(lufl,namein,iap,ifile,irec,jstat,lrec)
+      if(jstat.ne.0) stop 'from openfl: file does not exist'
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine opnfil(lufl,namein,iap,ifile,irec,istat,lrec)
+      character*1 quote,null
+      parameter (quote='"')
+      parameter (null=char(0))
+      character*(*) namein
+      character*80 path,name
+      character*200 mess
+      parameter (nlu=20)
+      common/openfile/jchn(nlu),jrec(nlu),jfile(nlu),jrecl(nlu)
+      common/optdr/ifopt(nlu)
+      common/oasi/ichan,itchan,ifonli
+      common/ercod/ierl
+      save ifirst
+      data ifirst/0/
+      ierl=0
+      iopt=0
+      if(lrec.lt.0) iopt=1
+      istat=0
+      if(ifirst.eq.0) then
+        ifirst=1
+        do 20 i=1,nlu
+   20   jchn(i)=0
+      endif
+      path=namein
+      name=namein
+      if(path(1:4).ne.'/opt') then
+        ifopt(lufl)=0
+      else
+        name=path
+        nbynam=len(name)
+        do while (nbynam.gt.0.and.name(nbynam:nbynam).eq.' ')
+          nbynam=nbynam-1
+        enddo
+        jstat=0
+        call oasopen()
+        path='mount '//quote//name(6:nbynam)//quote
+        llen=3+nbynam
+        call oassend('offline',mess,lmess,-1)
+        call oassend('dismount',mess,lmess,-1)
+        itry=0
+  629   itry=1+itry
+        call oassend(path(1:llen),mess,lmess,-1)
+        if(lmess.ne.0) then
+          if(itry.le.4.and.mess(1:21).ne.'E-DMGR-TAPE NOT FOUND')
+     1      goto 629
+          call oasclose()
+          jstat=1
+        else
+          call oassend('online',mess,lmess,-1)
+          call wait(200)
+          path='/dev/rmt0'
+          ifopt(lufl)=1
+        endif
+      endif
+      if(jstat.ne.0) then
+        istat=4
+        return
+      endif
+      if(iap.eq.1) then
+c       read only
+        isunop=0
+      else
+c       read/write
+        isunop=2
+      endif
+
+      if(ifopt(lufl).eq.0.or.itchan.lt.0) then
+        call adnul(path,path)
+        call copen(path,jchn(lufl),isunop,ierrno)
+        if(ierrno.ne.0) call check('copen in opnfil')
+      else
+        jchn(lufl)=itchan
+      endif
+      call fstat(lufl,lent,isuntyp,isize)
+      write(0,"('sun file mode (octal): ',8r,i10)") isuntyp
+      if(isuntyp.eq.o'20666') then
+        call cstexc(jchn(lufl),ires,ierrno)
+        jrecl(lufl)=0
+        jfile(lufl)=ifile
+        jrec(lufl)=irec
+        if(ifile.gt.0)  call cmtio(jchn(lufl),1,ifile,ires,ierrno)
+        if(irec.gt.0)  call cmtio(jchn(lufl),3,irec,ires,ierrno)
+      else
+        jrecl(lufl)=iabs(lrec)
+        jfile(lufl)=isuntyp
+        if(iopt.eq.1) then
+          jfile(lufl)=200
+        endif
+        jrec(lufl)=irec
+        if(iap.eq.3.or.iap.eq.5.or.iap.eq.6)
+     1     jrec(lufl)=(isize+jrecl(lufl)-1)/jrecl(lufl)+irec
+        jrec(lufl)=max0(0,jrec(lufl))
+      endif
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine rewfl(lufl)
+      parameter (nlu=20)
+      common/openfile/jchn(nlu),jrec(nlu),jfile(nlu),jrecl(nlu)
+      if(jrecl(lufl).eq.0) then
+        if(jfile(lufl).le.0) then
+           call rewtp(lufl)
+           jfile(lufl)=0
+        else
+          call cmtio(jchn(lufl),2,1,ires,ierrno)
+          if(ierrno.ne.0) call check('cmtio:backfile in rewfl')
+          call cmtio(jchn(lufl),1,1,ires,ierrno)
+          if(ierrno.ne.0) call check('cmtio:forwardfile in rewfl')
+        endif
+      endif
+      jrec(lufl)=0
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine rewtp(lufl)
+      parameter (nlu=20)
+      common/openfile/jchn(nlu),jrec(nlu),jfile(nlu),jrecl(nlu)
+      if(jrecl(lufl).eq.0) then
+        call cmtio(jchn(lufl),5,1,ires,ierrno)
+        if(ierrno.ne.0) call check('cmtio:rewind in rewtp')
+        jrec(lufl)=0
+        jfile(lufl)=0
+      else
+        call rewfl(lufl)
+      endif
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine skipfl(lufl)
+      parameter (nlu=20)
+      common/openfile/jchn(nlu),jrec(nlu),jfile(nlu),jrecl(nlu)
+      if(jrecl(lufl).eq.0) then
+        call cmtio(jchn(lufl),1,1,ires,ierrno)
+        if(ierrno.ne.0) call check('cmtio:forwardfile in skipfl')
+        jfile(lufl)=jfile(lufl)+1
+      endif
+      jrec(lufl)=0
+      return
+      end
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine upper(string)
+      character*(*) string
+      ll=len(string)
+      do 10 i=1,ll
+      ic=ichar(string(i:i))
+      if(ic.gt.95) ic=ic-32
+   10 string(i:i)=char(ic)
+      return
+      end
+

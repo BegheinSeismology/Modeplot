@@ -1,0 +1,2 @@
+      parameter (nlu=20)
+      common/openfile/jchn(nlu),jrec(nlu),jfile(nlu),jrecl(nlu)

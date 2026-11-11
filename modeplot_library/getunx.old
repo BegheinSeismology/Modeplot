@@ -1,0 +1,70 @@
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      character*80 function getunx(ident,nni,nbyts)
+      character*1 null
+      parameter (null=char(0))
+      character*(*) ident
+      character*30 swnam
+      character*80 cline
+      common/ccmlin/swnam(30),cline
+      common/icmlin/nswt,lswnam(30),ifreq(30),nmin(30),nmax(30)
+     1         ,icnt(30),iopn(30),iptr(30),itable(100,3)
+      nn=max0(1,nni)
+      ll=len(ident)
+      do while (ll.gt.0.and.(ident(ll:ll).eq.' '
+     1          .or.ident(ll:ll).eq.null))
+        ll=ll-1
+      enddo
+      imatch=0
+      iswt=0
+      ierr=0
+      do i=1,nswt
+        if((ll.eq.0.and.lswnam(i).eq.0)
+     1   .or.(ll.gt.0.and.ident(1:ll).eq.swnam(i)(1:ll))) then
+          imatch=1+imatch
+          if(iswt.eq.0) iswt=i
+        endif
+      enddo
+      if(imatch.eq.0) then
+        ierr=1
+        goto 99
+      else if(imatch.ne.1) then
+        ierr=2
+        goto 99
+      else
+        if(icnt(iswt).lt.0) then
+          nbyts=-1
+          getunx=' '
+          return
+        else if(nn.gt.icnt(iswt)) then
+          nbyts=0
+          getunx=' '
+          return
+        else
+          ipt=iptr(iswt)
+          ipt0=ipt
+          do i=1,nn-1
+            ipt=itable(ipt,3)
+            if(ipt.eq.ipt0) then
+              ierr=3
+              goto 99
+            endif
+          enddo
+          ip1=itable(ipt,1)
+          ip2=itable(ipt,2)
+          nbyts=ip2-ip1+1
+          getunx=cline(ip1:ip2)
+          return
+        endif
+      endif
+   99 continue
+      goto (1,2,3),ierr
+    1 write(0,"('getunx: no match')")
+      goto 97
+    2 write(0,"('getunx: non-unique abbreviation for identifier')")
+      goto 97
+    3 write(0,"('getunx: required argument not found in table')")
+      goto 97
+   97 call exit(2)
+      end

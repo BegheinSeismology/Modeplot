@@ -1,0 +1,125 @@
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine oasopen()
+      save
+      include 'oasstat.h'
+cc     parameter (JKUND=-1)
+cc     parameter (JKPAS= 0)
+cc     parameter (JKOFL= 1)
+cc     parameter (JKONL= 2)
+cc     parameter (MXJUKE=2)
+cc     common/oasi/njuke,jukeno,ichan(MXJUKE),jukest(MXJUKE),itchan,interc
+      integer o341,z4000
+      parameter (o341=1+8*(4+8*3))
+      parameter (z4000=4*16**3)
+
+      character*1 null
+      parameter (null=char(0))
+      character*200 mess
+      character*30 dev
+      itry=0
+   11 open(99,file='/home/eeyore1/john/eq/jukeconfig')
+c     1    ,status='read')
+      njuke=0
+  100 read(99,'(i1,1x,a30)',end=101) n,dev
+      njuke=1+njuke
+      ldev=istlen(dev)
+      
+      ittry=0
+      call copen(dev(1:ldev)//null,ichan(njuke),2,ierrno,0,0)
+
+      if(ierrno.ne.0) then
+
+        if(ierrno.eq.16) then
+           if(itry.eq.0) then
+             itry=1
+             write(0,'(''opt: device busy: waiting ...'')')
+           endif
+
+
+
+           do i=1,njuke-1
+             call cclose(ichan(i),ires,ierrno)
+           enddo
+
+           close(99)
+           call wait(4000)
+           goto 11
+        else
+
+
+
+
+          call cperror('opt')
+          call exit(2)
+        endif
+      endif
+
+      goto 100
+  101 continue
+      close(99)
+
+      itchan=-1
+
+      call copen('/dev/nrmt8',itch,0,ierrno,0,0)
+      if(ierrno.eq.0) then
+        itchan=itch
+      else if(ierrno.eq.6) then
+
+        if(ittry.eq.0) then
+          write(0,'(''opt: tape device in use: waiting ...'')')
+          ittry=1
+        endif
+
+
+
+        do i=1,njuke
+          call cclose(ichan(i),ires,ierrno)
+        enddo
+
+
+        close(99)
+        call wait(4000)
+
+        goto 11
+
+
+
+      else if(ierrno.ne.5) then
+        call cperror('oasopen: tape')
+        call exit(2)
+      endif
+  
+
+      do i=1,njuke
+      jukeno=i
+
+      call cgtflag(ichan(jukeno),iflag,ires,ierrno)
+      iflag=o341
+      call cstflag(ichan(jukeno),iflag,13,ires,ierrno)
+      call cgtlmw(ichan(jukeno),iword,ires,ierrno)
+      call cstlmw(ichan(jukeno),z4000,ires,ierrno)
+      call cstdtr(ichan(jukeno),ires,ierrno)
+      call cstexc(ichan(jukeno),ires,ierrno)
+      itried=0
+   20 call oasflush()
+      call oassend('offline',mess,lmess,200)
+      if(lmess.lt.0) then
+        if(itried.eq.0) then
+          write(0,'(''opt: oas not responding: waiting ...'')')
+        endif
+        itried=1+itried
+        call wait(4000)
+        goto 20
+      endif
+
+      jukest(jukeno)=JKOFL
+
+      enddo
+
+      jukeno=1
+c      call oassend('passthru',mess,lmess,-1)
+c      jukeno=2
+      return
+      end

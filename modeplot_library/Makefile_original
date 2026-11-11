@@ -1,0 +1,151 @@
+LIBDIR=$(HOME)/lib$(MS)
+LIB =libio
+
+
+FCOMPILE = f77 -c -O3 -e
+FLINK = f77
+FFCOMPILE = f77 -c -03  -D__SunOS_5_3 -e
+CCOMPILE = cc -c -O3 
+
+.f.a:
+	${FCOMPILE}  $<
+	ar rv $@ $*.o
+	rm -f $*.o
+
+.F.a:
+	${FFCOMPILE}  $<
+	ar rv $@ $*.o
+	rm -f $*.o
+
+.c.a:	
+	${CCOMPILE} $<
+	ar rv $@ $*.o
+	rm -f $*.o
+
+$(LIBDIR)/$(LIB).a: \
+	$(LIBDIR)/$(LIB).a(gethost.o) \
+	$(LIBDIR)/$(LIB).a(omount.o) \
+	$(LIBDIR)/$(LIB).a(byswap.o) \
+	$(LIBDIR)/$(LIB).a(tposn.o) \
+	$(LIBDIR)/$(LIB).a(oasrewt.o) \
+	$(LIBDIR)/$(LIB).a(lparse.o) \
+	$(LIBDIR)/$(LIB).a(margsu.o) \
+	$(LIBDIR)/$(LIB).a(chekmli.o) \
+	$(LIBDIR)/$(LIB).a(getmli.o) \
+	$(LIBDIR)/$(LIB).a(mgetali.o) \
+	$(LIBDIR)/$(LIB).a(miargli.o) \
+	$(LIBDIR)/$(LIB).a(flieee.o) \
+	$(LIBDIR)/$(LIB).a(fpt5.o) \
+	$(LIBDIR)/$(LIB).a(fpt6.o) \
+	$(LIBDIR)/$(LIB).a(ireclu.o) \
+	$(LIBDIR)/$(LIB).a(complnam.o) \
+	$(LIBDIR)/$(LIB).a(lockfl.o) \
+	$(LIBDIR)/$(LIB).a(charmap.o) \
+	$(LIBDIR)/$(LIB).a(juke.o) \
+	$(LIBDIR)/$(LIB).a(import.o) \
+	$(LIBDIR)/$(LIB).a(fldg.o) \
+	$(LIBDIR)/$(LIB).a(dfldg.o) \
+	$(LIBDIR)/$(LIB).a(rcreat.o) \
+	$(LIBDIR)/$(LIB).a(rcreao.o) \
+	$(LIBDIR)/$(LIB).a(ftimes.o) \
+	$(LIBDIR)/$(LIB).a(adnul.o) \
+	$(LIBDIR)/$(LIB).a(backfl.o) \
+	$(LIBDIR)/$(LIB).a(backsp.o) \
+	$(LIBDIR)/$(LIB).a(bffi.o) \
+	$(LIBDIR)/$(LIB).a(bffin.o) \
+	$(LIBDIR)/$(LIB).a(bffis.o) \
+	$(LIBDIR)/$(LIB).a(bffo.o) \
+	$(LIBDIR)/$(LIB).a(bffos.o) \
+	$(LIBDIR)/$(LIB).a(bffout.o) \
+	$(LIBDIR)/$(LIB).a(check.o) \
+	$(LIBDIR)/$(LIB).a(chekcl.o) \
+	$(LIBDIR)/$(LIB).a(chekgl.o) \
+	$(LIBDIR)/$(LIB).a(closfl.o) \
+	$(LIBDIR)/$(LIB).a(endfl.o) \
+	$(LIBDIR)/$(LIB).a(fillu.o) \
+	$(LIBDIR)/$(LIB).a(fstat.o) \
+	$(LIBDIR)/$(LIB).a(fstatn.o) \
+	$(LIBDIR)/$(LIB).a(inunx.o) \
+	$(LIBDIR)/$(LIB).a(reunx.o) \
+	$(LIBDIR)/$(LIB).a(istlen.o) \
+	$(LIBDIR)/$(LIB).a(iststa.o) \
+	$(LIBDIR)/$(LIB).a(getunx.o) \
+	$(LIBDIR)/$(LIB).a(getenv.o) \
+	$(LIBDIR)/$(LIB).a(getgnl.o) \
+	$(LIBDIR)/$(LIB).a(igdate.o) \
+	$(LIBDIR)/$(LIB).a(igtime.o) \
+	$(LIBDIR)/$(LIB).a(lenfl.o) \
+	$(LIBDIR)/$(LIB).a(krecl.o) \
+	$(LIBDIR)/$(LIB).a(lenlu.o) \
+	$(LIBDIR)/$(LIB).a(lower.o) \
+	$(LIBDIR)/$(LIB).a(lufil.o) \
+	$(LIBDIR)/$(LIB).a(openti.o) \
+	$(LIBDIR)/$(LIB).a(oposn.o) \
+	$(LIBDIR)/$(LIB).a(oreset.o) \
+	$(LIBDIR)/$(LIB).a(oasclose.o) \
+	$(LIBDIR)/$(LIB).a(oasopen.o) \
+	$(LIBDIR)/$(LIB).a(oasintc.o) \
+	$(LIBDIR)/$(LIB).a(oassend.o) \
+	$(LIBDIR)/$(LIB).a(oasterm.o) \
+	$(LIBDIR)/$(LIB).a(oasnam.o) \
+	$(LIBDIR)/$(LIB).a(openfl.o) \
+	$(LIBDIR)/$(LIB).a(openw.o) \
+	$(LIBDIR)/$(LIB).a(opnfil.o) \
+	$(LIBDIR)/$(LIB).a(openfc.o) \
+	$(LIBDIR)/$(LIB).a(opnflc.o) \
+	$(LIBDIR)/$(LIB).a(glink.o) \
+	$(LIBDIR)/$(LIB).a(glinkd.o) \
+	$(LIBDIR)/$(LIB).a(rewfl.o) \
+	$(LIBDIR)/$(LIB).a(rewtp.o) \
+	$(LIBDIR)/$(LIB).a(skipfl.o) \
+	$(LIBDIR)/$(LIB).a(strip.o) \
+	$(LIBDIR)/$(LIB).a(upper.o) \
+	$(LIBDIR)/$(LIB).a(ilbyte.o) \
+	$(LIBDIR)/$(LIB).a(isbyte.o) \
+	$(LIBDIR)/$(LIB).a(wait.o) \
+	$(LIBDIR)/$(LIB).a(error.o) \
+	$(LIBDIR)/$(LIB).a(csubs.o) \
+	$(LIBDIR)/$(LIB).a(rmtoaslib.o)
+
+
+$(LIBDIR)/$(LIB).a(chekmli.o): margli.h
+$(LIBDIR)/$(LIB).a(getmli.o): margli.h
+$(LIBDIR)/$(LIB).a(lparse.o): margli.h
+$(LIBDIR)/$(LIB).a(margsu.o): margli.h
+$(LIBDIR)/$(LIB).a(mgetali.o): margli.h
+$(LIBDIR)/$(LIB).a(miargli.o): margli.h
+$(LIBDIR)/$(LIB).a(backfl.o): openfile.h 
+$(LIBDIR)/$(LIB).a(backsp.o): openfile.h 
+$(LIBDIR)/$(LIB).a(bffi.o): openfile.h 
+$(LIBDIR)/$(LIB).a(bffis.o): openfile.h 
+$(LIBDIR)/$(LIB).a(bffo.o): openfile.h 
+$(LIBDIR)/$(LIB).a(bffos.o): openfile.h 
+$(LIBDIR)/$(LIB).a(closfl.o): openfile.h 
+$(LIBDIR)/$(LIB).a(endfl.o): openfile.h 
+$(LIBDIR)/$(LIB).a(fillu.o): openfile.h 
+$(LIBDIR)/$(LIB).a(fstat.o): openfile.h 
+$(LIBDIR)/$(LIB).a(fstatn.o): openfile.h 
+$(LIBDIR)/$(LIB).a(chekcl.o): getgnl.h getunx.h 
+$(LIBDIR)/$(LIB).a(getunx.o): getgnl.h getunx.h 
+$(LIBDIR)/$(LIB).a(chekgl.o): getgnl.h 
+$(LIBDIR)/$(LIB).a(getgnl.o): getgnl.h 
+$(LIBDIR)/$(LIB).a(ireclu.o): openfile.h 
+$(LIBDIR)/$(LIB).a(lenfl.o): openfile.h 
+$(LIBDIR)/$(LIB).a(lenlu.o): openfile.h 
+$(LIBDIR)/$(LIB).a(lockfl.o): openfile.h 
+$(LIBDIR)/$(LIB).a(lufil.o): openfile.h 
+$(LIBDIR)/$(LIB).a(opnflc.o): openfile.h 
+$(LIBDIR)/$(LIB).a(oposn.o): openfile.h 
+$(LIBDIR)/$(LIB).a(rewfl.o): openfile.h 
+$(LIBDIR)/$(LIB).a(rewtp.o): openfile.h 
+$(LIBDIR)/$(LIB).a(skipfl.o): openfile.h 
+$(LIBDIR)/$(LIB).a(oasclose.o): oasstat.h 
+$(LIBDIR)/$(LIB).a(oasintc.o): oasstat.h 
+$(LIBDIR)/$(LIB).a(oasopen.o): oasstat.h 
+$(LIBDIR)/$(LIB).a(oassend.o): oasstat.h 
+$(LIBDIR)/$(LIB).a(oasterm.o): oasstat.h 
+$(LIBDIR)/$(LIB).a(opnflc.o): oasstat.h olinkdir.h
+$(LIBDIR)/$(LIB).a(oreset.o): oasstat.h 
+$(LIBDIR)/$(LIB).a(tposn.o): openfile.h 
+
+$(LIBDIR)/$(LIB).a: ; ranlib $(LIBDIR)/$(LIB).a

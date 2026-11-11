@@ -1,0 +1,652 @@
+#include <sys/types.h>
+#include </home/eeyore1/john/eq/src/libio/rmt.h>
+#include <sys/stat.h>
+#include <sys/times.h>
+#include <sys/ioctl.h>
+#include <sys/mtio.h>
+#include <sys/file.h>
+#include <sys/socket.h>
+
+#if ( defined(MachineT) ) 
+#include <dirent.h>
+#include <sys/fs/s5dir.h>
+#define	_IO(x,y)	(IOC_VOID|('x'<<8)|y)
+#define direct dirent
+#define cgetenv_ CGETENV
+#define clockf_ CLOCKF
+#define cermes_ CERMES
+#define cgterr_ CGTERR
+#define ccldtr_ CCLDTR
+#define csleep_ CSLEEP
+#define ctrun_ CTRUN
+#define cfork_ CFORK
+#define cgetpid_ CGETPID
+#define cgetppid_ CGETPPID
+#define copendir_ COPENDIR
+#define creaddir_ CREADDIR
+#define cclosedir_ CCLOSEDIR
+#define cmtio_ CMTIO
+#define cread_ CREAD
+#define clseek_ CLSEEK
+#define copen_ COPEN
+#define cunlink_ CUNLINK
+#define cclose_ CCLOSE
+#define cstexc_ CSTEXC
+#define cperror_ CPERROR
+#define cgtflag_ CGTFLAG
+#define cstflag_ CSTFLAG
+#define cgtlmw_ CGTLMW
+#define cstlmw_ CSTLMW
+#define cstdtr_ CSTDTR
+#define cnoblock_ CNOBLOCK
+#define cwrite_ CWRITE
+#define cflush_ CFLUSH
+#define creadlink_ CREADLINK
+#define cmkdir_ CMKDIR
+#define cfstat_ CFSTAT
+#else
+#include <sys/dir.h>
+#endif
+
+#if ( defined(MachineT) )
+#define F_STR char **
+#define F_STRP(x) *x
+#else
+#define F_STR char *
+#define F_STRP(x) x
+#endif
+/*#include <sys/ttold.h>*/
+#include <stdio.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sgtty.h>
+
+
+#if ( defined(MachineS) || defined(MachineT) )
+#define	TIOCFLUSH	_IOW(t, 16, int)
+#define	TIOCCDTR	_IO(t, 120)
+#define	TIOCSDTR	_IO(t, 121)
+#define	TIOCLGET	_IOR(t, 124, int)
+#define	TIOCLSET	_IOW(t, 125, int)
+#define	L_SET		0
+#define	L_INCR		1
+#define	L_XTND		2
+#endif
+
+#define LCBUF 100
+
+struct sgttyb   pack;
+struct stat     buf;
+
+
+#if ( defined( MachineT ) )
+	cgetenv_(name,mess,lmes)
+#else
+	cgetenv_(name,mess,lmes,lname,lmess)
+	int lname, lmess;
+#endif
+	F_STR  name;
+	F_STR  mess;
+	int *lmes;
+{	char buf[LCBUF];
+ 	char *i, *ptr;
+	char *namek, *messk;
+        int lnamei , lmessi;
+	int k;
+	extern char *getenv();
+#if ( defined( MachineT ) )
+        F_STR temp;
+        temp=name ; lnamei=(int)(*(++temp));
+        temp=mess ; lmessi=(int)(*(++temp));
+#else
+	lnamei=lname;
+	lmessi=lmess;
+#endif
+	for ( k=0,namek=F_STRP(name); ((*namek) != ' ') && ((*namek) != '\0') && k < lnamei ; )
+	{	
+		if(k >= LCBUF)
+		{	printf("cgetenv: internal buffer size exceeded:%d\n",k);
+			exit(2);
+		}
+		buf[k]=*namek; k++; namek++;
+	}
+	if(k >= LCBUF)
+	{	printf("cgetenv: internal buffer size exceeded:%d\n",k);
+		exit(2);
+	}
+	buf[k]='\0';
+	ptr=getenv(buf);
+	if( ptr == (char *)0 )
+	{	*lmes=0;
+	}
+	else
+	{
+		for ( i=ptr, k=0, messk=F_STRP(mess); (*i) != '\0' ; )
+		{	if ( k >= lmessi )
+			{	printf("cgetenv: message buffer size exceeded:%d\n",k);
+				exit(2);
+			}
+			(*messk)=(*i); i++; k++; messk++;
+		}
+		if ( k >= lmessi )
+		{	printf("cgetenv: message buffer size exceeded:%d\n",k);
+			exit(2);
+		}
+		(*messk)='\0';
+		*lmes = k;
+	}
+}
+
+
+clockf_(ichan,iopt,isize,ires,ierrno)
+	long *ichan, *iopt, *isize, *ires, *ierrno;
+{	extern int errno, lockf();
+	int kopt;
+        int tchan;
+        long tsize, thou=1000;
+	kopt = (int) (*iopt);
+	
+	switch (kopt) {
+	case 0:
+		kopt = F_ULOCK;
+		break;
+	case 1:
+		kopt = F_LOCK;
+		break;
+	case 2:
+		kopt = F_TLOCK;
+		break;
+	case 3:
+		kopt = F_TEST;
+		break;
+	default:
+		fprintf(stderr, "lockf: unknown option %d", *iopt);
+		exit(2);
+		break;
+	}
+
+
+	errno=0;
+	tchan = (int)(*ichan);
+	tsize = *isize;
+/*	(void)cusleep_(&thou); */
+	printf("calling lockf %d  %d  %d\n",tchan,kopt,tsize); 
+	*ires = (long) lockf(tchan, kopt, tsize);
+	printf("lockf through\n"); 
+/*	(void)cusleep_(&thou); */
+	*ierrno = (long) errno;
+}
+
+cermes_(ierrno,mess,lmess)
+	char *mess;
+	long *ierrno, *lmess;
+{	extern int sys_nerr;
+	extern char *sys_errlist[];
+	char *cp, *mp;
+	int lm;
+	if((*ierrno >= 0) & (*ierrno < sys_nerr))
+	  {for (lm=0, mp=mess, cp=sys_errlist[*ierrno];*cp;mp++, cp++)
+	     { *mp = *cp; lm++; } 
+	   *lmess=(long)lm;
+	  }
+
+
+	else
+	  *lmess = -1;
+}
+	
+
+copendir_(name,ichan)
+	F_STR name;
+	long *ichan;
+{	extern DIR *opendir();
+	*ichan=(long) opendir(F_STRP(name));
+}
+
+cclosedir_(ichan)
+	long *ichan;
+{	closedir( (DIR *)(*ichan) );
+}
+
+
+creaddir_(ichan,name,lname,idno)
+	F_STR name;
+	long  *ichan, *lname, *idno;
+{
+	short i, l;
+	struct direct *dptr;
+	char *nn;
+	if(dptr = readdir((DIR *)(*ichan))) 
+	  {
+/*	   l=dptr->d_namlen;
+	   *lname= (long) l;
+	   *idno=(long) dptr->d_ino;
+           for (i=0, nn=name; i < l; i++, nn++)
+             *nn=dptr->d_name[i];      old version */
+
+	   *idno=(long) dptr->d_ino;
+	   for (i=0, nn=F_STRP(name); dptr->d_name[i] != 0 ; i++, nn++)
+		*nn=dptr->d_name[i];
+	   *lname=i;
+	   *(++nn)=dptr->d_name[i];
+	  }
+        else
+          {*lname = 0;
+           *idno = -1;
+          }
+}
+
+creadlink_(path, pbuf, pnbyt, ires, ierrno)
+	F_STR pbuf;
+        F_STR path;
+	long           *pnbyt, *ires, *ierrno;
+{
+	extern int      errno, readlink();
+	errno = 0;
+	*ires = (long) readlink(F_STRP(path) , F_STRP(pbuf), (int) (*pnbyt));
+	*ierrno = (long) errno;
+}
+
+cgterr_(ierrno)
+	long *ierrno;
+{	extern int errno;
+	*ierrno=(long)errno;
+}
+
+cmkdir_(pname,mode,ires,ierrno)
+        long *ires,*ierrno,*mode;
+        F_STR pname;
+{
+
+        extern int errno, mkdir();
+        errno=0;
+        *ires=(long) mkdir(F_STRP(pname),(int)(*mode));
+        *ierrno=(long)errno;
+}
+ 
+
+
+cflush_(ichan, inout, ires, ierrno)
+	long    *ichan, *inout, *ires, *ierrno;
+{
+	extern int errno, ioctl();
+	int arg;
+        errno=0;
+	arg=(int)(*inout);
+        *ires=(long) ioctl((int)(*ichan),TIOCFLUSH,&arg);
+        *ierrno=(long) errno;
+}
+
+
+cstdtr_(ichan, ires, ierrno)
+	long    *ichan, *ires, *ierrno;
+{
+	caddr_t t;
+	extern int errno, ioctl();
+        errno=0;
+        *ires=(long) ioctl((int)(*ichan),TIOCSDTR,0);
+        *ierrno=(long) errno;
+}
+
+
+ccldtr_(ichan, ires, ierrno)
+	long    *ichan, *ires, *ierrno;
+{
+	caddr_t t;
+	extern int errno, ioctl();
+        errno=0;
+        *ires=(long) ioctl((int)(*ichan),TIOCCDTR,0);
+        *ierrno=(long) errno;
+}
+
+
+cgtlmw_(ichan, iword, ires, ierrno)
+	long    *ichan, *iword, *ires, *ierrno;
+{
+	extern int errno, ioctl();
+	int word;
+        errno=0;
+        *ires=(long) ioctl((int)(*ichan),TIOCLGET,&word);
+	*iword=(long) word;
+        *ierrno=(long) errno;
+}
+
+
+cstlmw_(ichan, iword, ires, ierrno)
+	long    *ichan, *iword, *ires, *ierrno;
+{
+	extern int errno, ioctl();
+	long word;
+        errno=0;
+        word=(*iword);
+        *ires=(long) ioctl((int)(*ichan),TIOCLSET,&word);
+        *ierrno=(long) errno;
+}
+
+
+cgtflag_(ichan, iflag, ires, ierrno)
+	long           *ichan, *iflag, *ires, *ierrno;
+{
+	extern int      errno, ioctl();
+	errno = 0;
+	*ires = (long) ioctl((int) (*ichan), TIOCGETP, &pack);
+	*ierrno = (long) errno;
+	*iflag = (long) pack.sg_flags;
+}
+
+cstflag_(ichan, iflag, speed, ires, ierrno)
+	long           *ichan, *iflag, *speed, *ires, *ierrno;
+{
+	extern int      errno, ioctl();
+	errno = 0;
+	pack.sg_flags = (int) (*iflag);
+        pack.sg_ispeed=(char) (*speed);
+        pack.sg_ospeed=(char) (*speed);
+	*ires = (long) ioctl((int) (*ichan), TIOCSETP, &pack);
+	*ierrno = (long) errno;
+}
+
+cstexc_(ichan, ires, ierrno)
+	long           *ichan, *ires, *ierrno;
+{
+	extern int      errno, ioctl();
+	char           *dummy;
+	errno = 0;
+	*ires = (long) ioctl((int) (*ichan), TIOCEXCL, dummy);
+	*ierrno = (long) errno;
+}
+
+cnoblock_(ichan, iopt, ires, ierrno)
+	long           *ichan, *iopt, *ires, *ierrno;
+{
+	extern int      errno, ioctl();
+	int             tiopt;
+	tiopt = (int) (*iopt);
+	errno = 0;
+	*ires = (long) ioctl((int) (*ichan), FIONBIO, &tiopt);
+	*ierrno = (long) errno;
+}
+
+
+copen_(pname, ichan, iopt, ierrno, inew, mode)
+	F_STR           pname;
+	long           *ichan, *iopt, *ierrno, *inew, *mode;
+{
+	extern int      errno;
+	extern int      open();
+	int             kopt, knew;
+	kopt = (int) (*iopt);
+	knew = (int) (*inew);
+	switch (kopt) {
+	case 0:
+		kopt = O_RDONLY;
+		break;
+	case 1:
+		kopt = O_WRONLY;
+		break;
+	case 2:
+		kopt = O_RDWR;
+		break;
+	case 8:
+		kopt = O_APPEND;
+		break;
+	default:
+		fprintf(stderr, "copen: unknown option %d", *iopt);
+		exit(2);
+		break;
+	}
+	switch (knew) {
+	case 0:
+		break;
+	case 1:
+		kopt = kopt | O_EXCL | O_CREAT;
+		break;
+	case 2:
+		kopt = kopt | O_TRUNC | O_CREAT;
+		break;
+	case 3:
+		kopt = kopt | O_TRUNC |  O_EXCL;
+		break;
+	default:
+		fprintf(stderr, "copen: unknown status %d", *inew);
+		exit(2);
+		break;
+	}
+	errno = 0;
+	*ichan = (long) open(F_STRP(pname), kopt, (int)(*mode) );
+	*ierrno = (long) errno;
+}
+
+
+cunlink_(pname,ires,ierrno)
+	F_STR           pname;
+	long *ires, *ierrno;
+{
+	extern int      errno;
+	extern int      unlink();
+	*ires = (long) unlink(F_STRP(pname));
+	*ierrno = (long) errno;
+}
+
+cclose_(ichan, ires, ierrno)
+	long           *ichan, *ires, *ierrno;
+{
+	extern int      errno;
+	extern int      close();
+	errno = 0;
+	*ires = (long) close((int) (*ichan));
+	*ierrno = (long) errno;
+}
+
+cread_(ichan, pbuf, pnbyt, ires, ierrno)
+	char           *pbuf;
+	long           *ichan, *pnbyt, *ires, *ierrno;
+{
+	extern int      errno, read();
+	errno = 0;
+	*ires = (long) read((int) (*ichan), pbuf, (int) (*pnbyt));
+	*ierrno = (long) errno;
+}
+
+cwrite_(ichan, pbuf, pnbyt, ires, ierrno)
+	char           *pbuf;
+	long           *ichan, *pnbyt, *ires, *ierrno;
+{
+	extern int      errno, write();
+	errno = 0;
+	*ires = (long) write((int) (*ichan), pbuf, (int) (*pnbyt));
+	*ierrno = (long) errno;
+}
+
+clseek_(ichan, offst, iopt, ires, ierrno)
+	long           *ichan, *offst, *iopt, *ires, *ierrno;
+{
+	extern int      errno, lseek();
+	int             kopt;
+	kopt = (int) (*iopt);
+	switch (kopt) {
+	case 0:
+		kopt = L_SET;
+		break;
+	case 1:
+		kopt = L_INCR;
+		break;
+	case 2:
+		kopt = L_XTND;
+		break;
+	default:
+		fprintf(stderr, "clseek: unknown optiion %d", *iopt);
+		exit(2);
+		break;
+	}
+	errno = 0;
+	*ires = (long) lseek((int) (*ichan), (*offst), kopt);
+	*ierrno = (long) errno;
+}
+
+cmtio_(ichan, iop, icnt, ires, ierrno)
+	long           *ichan, *iop, *icnt, *ires, *ierrno;
+{
+	extern int      errno, ioctl();
+	int             kopt;
+	struct mtop     magop;
+	kopt = (int) (*iop);
+	switch (kopt) {
+	case 0:
+		kopt = MTWEOF;
+		break;
+	case 1:
+		kopt = MTFSF;
+		break;
+	case 2:
+		kopt = MTBSF;
+		break;
+	case 3:
+		kopt = MTFSR;
+		break;
+	case 4:
+		kopt = MTBSR;
+		break;
+	case 5:
+		kopt = MTREW;
+		break;
+	case 6:
+		kopt = MTOFFL;
+		break;
+	case 7:
+		kopt = MTNOP;
+		break;
+	default:
+		fprintf(stderr, "cmtio: unknown optiion %d", *iop);
+		exit(2);
+		break;
+	}
+	magop.mt_op = kopt;
+	magop.mt_count = (long) (*icnt);
+	errno = 0;
+	*ires = (long) ioctl((int) (*ichan), MTIOCTOP, &magop);
+	*ierrno = (long) errno;
+	if(errno != 0) (void)perror("cmtio");
+}
+
+
+cperror_(s)
+	F_STR s;
+{
+	int             idum;
+	idum = perror(F_STRP(s));
+}
+
+
+
+csleep_(psec)
+	long           *psec;
+{
+	int             idum;
+	idum = sleep((unsigned) (*psec));
+}
+
+cfstat_(ichan, size, istat, ierrno)
+	long           *ichan, *size, *istat, *ierrno;
+{
+	extern int      errno;
+	extern int      fstat();
+	int             dummy;
+	errno = 0;
+	/* printf("calling fstat in c\n"); */
+	dummy = fstat((int) (*ichan), &buf);
+	/* printf("fstat through in c\n"); */
+	*ierrno = (long) errno;
+	*size = (long) (buf.st_size);
+	*istat = (long) (buf.st_mode);
+}
+
+/* Not used anywhere I think
+	cstat_(file, size, block, istat, timea, timem, ierrno)
+			char           *file;
+	long           *size, *block, *istat, *timea, *timem, *ierrno;
+	{
+		extern int      errno;
+		extern int      stat();
+		int             dummy;
+		errno = 0;
+		dummy = stat(file, &buf);
+		*ierrno = (long) errno;
+		*size = (long) (buf.st_size);
+		*istat = (long) (buf.st_mode);
+	        *block= buf.st_blksize;
+		*timea=(long) buf.st_atime;
+		*timem=(long) buf.st_mtime;
+	}
+*/
+
+ctrun_(ichan, leng, ierrno)
+	long           *ichan, *leng, *ierrno;
+{
+	extern int      errno, ftruncate();
+	int             dummy;
+	errno = 0;
+	dummy = ftruncate((int) (*ichan), (unsigned long) (*leng));
+	*ierrno = (long) errno;
+}
+
+cfork_(ires,ierrno)
+        long    *ires,*ierrno;
+{
+        extern int errno;
+        errno = 0;
+        *ires = (long) fork();
+        *ierrno = (long) errno;
+}
+
+cgetpid_(ires,ierrno)
+	long   *ires,*ierrno;
+{
+	extern int errno;
+	errno = 0;
+	*ires=(long)getpid();
+	*ierrno = (long) errno;
+}
+
+cgetppid_(ires,ierrno)
+	long   *ires,*ierrno;
+{
+	extern int errno;
+	errno = 0;
+	*ires=(long)getppid();
+	*ierrno = (long) errno;
+}
+
+
+/* this used to be called creadlink - i don't think its used anywhere */
+creadlinkg_(path, file, namlen, ierrno)
+	char		*path, *file;
+	int		*namlen, *ierrno;
+{
+	extern int	errno, readlink();
+	int		dummy;
+	errno = 0;
+	dummy = readlink(path, file, namlen);
+	if (dummy = -1) { *ierrno = errno; };
+	if (dummy!= -1) { *ierrno = dummy; };
+}
+
+#if ( defined(Machine3) || defined(Machine4) )
+cutimes_(pname, times, ires, ierrno)
+        long *ires, *ierrno;
+        long *times;
+        F_STR pname;
+{
+        extern int errno, utimes();
+        errno=0;
+        *ires= (long) utimes( F_STRP(pname),times);
+        *ierrno=(long)errno;
+}
+
+cusleep_(psec)
+	long           *psec;
+{
+	int             idum;
+	idum = usleep((unsigned) (*psec));
+}
+#endif

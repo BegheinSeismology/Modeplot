@@ -1,0 +1,2 @@
+dfldg.o:dfldg.F
+	fc -O2 -cpp -DMachine=${MS} -c -vreport dfldg.F

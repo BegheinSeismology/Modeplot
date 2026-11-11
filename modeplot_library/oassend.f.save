@@ -1,0 +1,79 @@
+c-------------------------------------------------------------------
+c-------- Programmed by J. H. Woodhouse ----------------------------
+c-------------------------------------------------------------------
+      subroutine oassend(command,response,lr,iwt)
+      save
+      character*(*) command,response
+      parameter (maxoas=200)
+      character*1 cr,nl
+      parameter (cr=char(13))
+      parameter (nl=char(10))
+      character*(maxoas) msg
+      character*(maxoas) temp
+      include 'oasstat.h'
+      ilc=0
+      ip=0
+      lc=len(command)
+      if(interc.gt.0) then
+        write(0,*) 'opt',jukeno,':',command(1:lc)
+      endif
+      do while (ilc.lt.lc)
+        ilc=ilc+1
+        if(command(ilc:ilc).eq.'^') then
+          ip=ip+1
+          ilc=ilc+1
+          temp(ip:ip)=char(iand('0f'x,ichar(command(ilc:ilc))))
+        else
+          ip=ip+1
+          temp(ip:ip)=command(ilc:ilc)
+        endif
+      enddo
+
+      ip=1+ip
+      temp(ip:ip)=cr
+      if(iwt.ge.0) then
+        call cnoblock(ichan,1,ires,ierrno)
+        if(ierrno.ne.0) call check('cnoblock in oassend')
+      endif
+
+      call cwrite(ichan,temp,ip,ires,ierrno)
+      if(ierrno.ne.0) call check('cwrite in oassend')
+      call cflush(ichan,1,ires,ierrno)
+      if(iwt.gt.0) call wait(iwt)
+      lr=0
+      ierrno=0
+      knt=0
+      do while(ierrno.eq.0.and.knt.ge.0)
+        lr=lr+1
+        call cread(ichan,msg(lr:lr),1,igot,ierrno)
+c       write(6,'(i8,1x,z4,1x,a1)') ierrno,ichar(msg(lr:lr)),msg(lr:lr)
+        if(ierrno.eq.0) then
+          if(msg(lr:lr).eq.'<') knt=knt+1
+          if(msg(lr:lr).eq.'>') knt=knt-1
+        endif
+      enddo
+
+      if(ierrno.ne.0) lr=lr-1
+      do i=1,lr
+        if(msg(i:i).eq.cr) msg(i:i)=nl
+        response(i:i)=msg(i:i)
+      enddo
+
+      if(msg(lr:lr).eq.nl) lr=lr-1
+      if(response(1:1).eq.nl) then
+        lr=lr-1
+        do i=1,lr
+          i1=i+1
+          response(i:i)=response(i1:i1)
+        enddo
+      endif
+
+      if(iwt.ge.0) call cnoblock(ichan,0,ires,ierrno)
+      if(lr.lt.1.or.response(lr:lr).ne.'>') then
+        lr=-1
+      else
+
+        call strip(response,lr)
+      endif
+      return
+      end
